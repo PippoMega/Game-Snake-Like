@@ -27,4 +27,8 @@ Technologies Used
 - JavaScript – For game logic and mechanics.
 
 
+Contributing
 
+Contributions are welcome!
+
+A suggested improvement is to add touch controls for mobile devices, allowing players to swipe in different directions to move the snake. If you’d like to implement this feature or others, feel free to open a pull request!
