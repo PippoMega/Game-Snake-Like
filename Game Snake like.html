@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake Game con Power Mode e Restart</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #222;
+      color: white;
+      height: 100vh;
+      margin: 0;
+      font-family: sans-serif;
+    }
+    #score, #powerCountdown {
+      font-size: 20px;
+      margin: 10px;
+    }
+    canvas {
+      background-color: black;
+      /* Il bordo verrà disegnato direttamente nel canvas */
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <div id="powerCountdown" style="display: none;">Power: 20 s</div>
+  <!-- Il canvas è reso focusable -->
+  <canvas id="gameCanvas" width="400" height="400" tabindex="0"></canvas>
+  <button id="startBtn">Start Game</button>
+  <button id="restartBtn" style="display: none;">Restart Game</button>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreDisplay = document.getElementById("score");
+    const powerCountdownDisplay = document.getElementById("powerCountdown");
+    const startBtn = document.getElementById("startBtn");
+    const restartBtn = document.getElementById("restartBtn");
+
+    const box = 20;
+    let snake, direction, food, score, gameInterval;
+    let blueFood = null; // Cibo blu speciale
+    let powerActive = false;
+    let powerModeEndTime = 0;
+    
+    // Funzione per ottenere il colore del serpente (lampeggiante se in power mode)
+    function getSnakeColor() {
+      if (powerActive) {
+        return (Math.floor(Date.now() / 300) % 2 === 0) ? "lime" : "white";
+      }
+      return "lime";
+    }
+
+    // Inizializza le variabili di gioco
+    function initGame() {
+      snake = [{ x: 10 * box, y: 10 * box }];
+      direction = "RIGHT";
+      score = 0;
+      scoreDisplay.textContent = "Score: " + score;
+      // Genera il cibo normale in modo casuale
+      food = {
+        x: Math.floor(Math.random() * (canvas.width / box)) * box,
+        y: Math.floor(Math.random() * (canvas.height / box)) * box
+      };
+      blueFood = null;
+      powerActive = false;
+      powerCountdownDisplay.style.display = "none";
+      // Imposta il focus sul canvas per ricevere i tasti
+      canvas.focus();
+      // Ferma eventuali loop di gioco esistenti
+      if (gameInterval) clearInterval(gameInterval);
+      gameInterval = setInterval(gameLoop, 100);
+      // Programma la comparsa del cibo blu dopo un tempo casuale (min 30s)
+      scheduleBlueFoodSpawn();
+    }
+
+    // Programma la comparsa del cibo blu speciale (min 30s, massimo 60s)
+    function scheduleBlueFoodSpawn() {
+      const delay = 30000 + Math.random() * 30000;
+      setTimeout(() => {
+        if (!blueFood && gameInterval) {
+          blueFood = {
+            x: Math.floor(Math.random() * (canvas.width / box)) * box,
+            y: Math.floor(Math.random() * (canvas.height / box)) * box
+          };
+        }
+      }, delay);
+    }
+
+    // Gestione degli input della tastiera
+    document.addEventListener("keydown", changeDirection);
+    function changeDirection(event) {
+      const key = event.key;
+      if (key === "ArrowUp" && direction !== "DOWN") {
+        direction = "UP";
+      } else if (key === "ArrowDown" && direction !== "UP") {
+        direction = "DOWN";
+      } else if (key === "ArrowLeft" && direction !== "RIGHT") {
+        direction = "LEFT";
+      } else if (key === "ArrowRight" && direction !== "LEFT") {
+        direction = "RIGHT";
+      }
+    }
+
+    // Disegna i bordi del campo con aperture centrali (gap largo 2 celle)
+    function drawBorders() {
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const midX = canvas.width / 2;
+      const midY = canvas.height / 2;
+      
+      // Bordo superiore: gap da (midX - box) a (midX + box)
+      ctx.moveTo(0, 0);
+      ctx.lineTo(midX - box, 0);
+      ctx.moveTo(midX + box, 0);
+      ctx.lineTo(canvas.width, 0);
+      
+      // Bordo inferiore
+      ctx.moveTo(0, canvas.height);
+      ctx.lineTo(midX - box, canvas.height);
+      ctx.moveTo(midX + box, canvas.height);
+      ctx.lineTo(canvas.width, canvas.height);
+      
+      // Bordo sinistro
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, midY - box);
+      ctx.moveTo(0, midY + box);
+      ctx.lineTo(0, canvas.height);
+      
+      // Bordo destro
+      ctx.moveTo(canvas.width, 0);
+      ctx.lineTo(canvas.width, midY - box);
+      ctx.moveTo(canvas.width, midY + box);
+      ctx.lineTo(canvas.width, canvas.height);
+      
+      ctx.stroke();
+    }
+
+    // Disegna lo stato attuale del gioco
+    function draw() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Disegna il cibo normale
+      ctx.fillStyle = "red";
+      ctx.fillRect(food.x, food.y, box, box);
+
+      // Se esiste, disegna il cibo blu speciale
+      if (blueFood) {
+        ctx.fillStyle = "blue";
+        ctx.fillRect(blueFood.x, blueFood.y, box, box);
+      }
+
+      // Disegna il serpente
+      ctx.fillStyle = getSnakeColor();
+      snake.forEach(segment => {
+        ctx.fillRect(segment.x, segment.y, box, box);
+      });
+
+      // Disegna i bordi con aperture
+      drawBorders();
+    }
+
+    // Aggiorna lo stato del gioco
+    function update() {
+      let head = { ...snake[0] };
+      if (direction === "UP") head.y -= box;
+      else if (direction === "DOWN") head.y += box;
+      else if (direction === "LEFT") head.x -= box;
+      else if (direction === "RIGHT") head.x += box;
+      
+      // Gestione del bordo:
+      if (powerActive) {
+        // In modalità power, il serpente attraversa sempre il bordo
+        if (head.x < 0) head.x = canvas.width - box;
+        else if (head.x >= canvas.width) head.x = 0;
+        if (head.y < 0) head.y = canvas.height - box;
+        else if (head.y >= canvas.height) head.y = 0;
+      } else {
+        // Modalità normale: solo attraverso le aperture (gap largo 2 celle)
+        const midX = canvas.width / 2;
+        const midY = canvas.height / 2;
+        // Bordo superiore
+        if (head.y < 0) {
+          if (head.x === midX || head.x === midX - box) {
+            head.y = canvas.height - box;
+          } else {
+            gameOver();
+            return;
+          }
+        }
+        // Bordo inferiore
+        if (head.y >= canvas.height) {
+          if (head.x === midX || head.x === midX - box) {
+            head.y = 0;
+          } else {
+            gameOver();
+            return;
+          }
+        }
+        // Bordo sinistro
+        if (head.x < 0) {
+          if (head.y === midY || head.y === midY - box) {
+            head.x = canvas.width - box;
+          } else {
+            gameOver();
+            return;
+          }
+        }
+        // Bordo destro
+        if (head.x >= canvas.width) {
+          if (head.y === midY || head.y === midY - box) {
+            head.x = 0;
+          } else {
+            gameOver();
+            return;
+          }
+        }
+      }
+      
+      // Gestione cibo normale e blu
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        scoreDisplay.textContent = "Score: " + score;
+        food = {
+          x: Math.floor(Math.random() * (canvas.width / box)) * box,
+          y: Math.floor(Math.random() * (canvas.height / box)) * box
+        };
+      } else if (blueFood && head.x === blueFood.x && head.y === blueFood.y) {
+        startPowerMode(20);
+        blueFood = null;
+        scheduleBlueFoodSpawn();
+      } else {
+        snake.pop();
+      }
+      
+      // Aggiornamento modalità power
+      if (powerActive) {
+        const remaining = Math.ceil((powerModeEndTime - Date.now()) / 1000);
+        powerCountdownDisplay.textContent = "Power: " + remaining + " s";
+        if (remaining <= 0) {
+          powerActive = false;
+          powerCountdownDisplay.style.display = "none";
+        }
+      }
+      
+      // Controlla collisioni con se stesso
+      for (let i = 0; i < snake.length; i++) {
+        if (head.x === snake[i].x && head.y === snake[i].y) {
+          gameOver();
+          return;
+        }
+      }
+      
+      snake.unshift(head);
+    }
+
+    // Attiva la modalità power per una durata in secondi
+    function startPowerMode(duration) {
+      powerActive = true;
+      powerModeEndTime = Date.now() + duration * 1000;
+      powerCountdownDisplay.style.display = "block";
+    }
+
+    // Game over: ferma il gioco e mostra il pulsante di restart
+    function gameOver() {
+      clearInterval(gameInterval);
+      restartBtn.style.display = "block";
+    }
+
+    // Loop principale del gioco
+    function gameLoop() {
+      update();
+      draw();
+    }
+
+    // Pulsante per avviare il gioco
+    startBtn.addEventListener("click", () => {
+      startBtn.style.display = "none";
+      initGame();
+    });
+
+    // Pulsante per restart dopo il game over
+    restartBtn.addEventListener("click", () => {
+      restartBtn.style.display = "none";
+      initGame();
+    });
+  </script>
+</body>
+</html>
