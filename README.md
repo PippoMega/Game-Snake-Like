@@ -1,4 +1,4 @@
-# Game Snake Like - Web Application
+# Snake Like Game- Web Application
 
 A simple Snake game built with HTML, CSS, and JavaScript, featuring additional mechanics for an enhanced gameplay experience.
 
